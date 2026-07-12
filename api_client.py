@@ -119,7 +119,7 @@ def fetch_seed(api_base, selected_overworld, selected_nether, selected_variation
             elif cat == "end":
                 excluded_vars.append(v)
         if excluded_vars:
-            url += "&exclude_variations=" + ",".join(excluded_vars)
+            url += "&without=" + ",".join(excluded_vars)
 
     if completion_ms:
         url += f"&completion={completion_ms}"
