@@ -18,26 +18,28 @@ from task_runner import task
 
 
 class SeedToolGUI:
-    # 现代配色方案
+    # 现代蓝白配色 - refined
     COLORS = {
-        'bg': '#f0f2f5',
+        'bg': '#f3f4f6',
         'card_bg': '#ffffff',
-        'primary': '#4f8cff',
-        'primary_hover': '#3a7be8',
-        'success': '#22c55e',
+        'primary': '#3b82f6',
+        'primary_hover': '#2563eb',
+        'primary_light': '#eff6ff',
+        'success': '#10b981',
         'warning': '#f59e0b',
         'danger': '#ef4444',
         'text': '#1e293b',
         'text_secondary': '#64748b',
         'text_muted': '#94a3b8',
-        'border': '#e2e8f0',
-        'input_bg': '#f8fafc',
+        'border': '#e5e7eb',
+        'input_bg': '#f9fafb',
+        'header_bg': '#1e3a5f',
     }
 
     def __init__(self, root):
         self.root = root
         self.root.title("一键导入Ranked种子 Pro Max")
-        self.root.geometry("1050x640")
+        self.root.geometry("1200x780"); self.root.eval("tk::PlaceWindow . center")
         self.root.resizable(True, True)
         self.root.configure(bg=self.COLORS['bg'])
 
@@ -91,11 +93,11 @@ class SeedToolGUI:
         style = ttk.Style()
         style.theme_use('clam')
 
-        self.FONT_TITLE = ("微软雅黑", 12, "bold")
-        self.FONT_HEADING = ("微软雅黑", 10, "bold")
-        self.FONT_BODY = ("微软雅黑", 9)
-        self.FONT_SMALL = ("微软雅黑", 8)
-        self.FONT_MONO = ("Consolas", 10)
+        self.FONT_TITLE = ("微软雅黑", 15, "bold")
+        self.FONT_HEADING = ("微软雅黑", 12, "bold")
+        self.FONT_BODY = ("微软雅黑", 11)
+        self.FONT_SMALL = ("微软雅黑", 10)
+        self.FONT_MONO = ("Consolas", 11)
 
         style.configure('TFrame', background=self.COLORS['bg'])
         style.configure('Card.TFrame', background=self.COLORS['card_bg'])
@@ -120,8 +122,9 @@ class SeedToolGUI:
         style.configure('TScrollbar', background=self.COLORS['border'])
 
     def _create_card(self, parent, title, **pack_kw):
+        ipadx = pack_kw.pop('ipadx', 0)
         card = Frame(parent, bg=self.COLORS['card_bg'], highlightbackground=self.COLORS['border'],
-                     highlightthickness=1, padx=14, pady=12)
+                     highlightthickness=1, padx=14+ipadx, pady=12)
         header = Frame(card, bg=self.COLORS['card_bg'])
         header.pack(fill='x', pady=(0, 8))
         ttk.Label(header, text=title, style='Heading.TLabel').pack(side=LEFT)
@@ -149,17 +152,22 @@ class SeedToolGUI:
 
     # ===================== 主布局 =====================
     def create_main_layout(self):
-        header = Frame(self.root, bg=self.COLORS['primary'], height=48)
+        # ---- Header with gradient feel ----
+        header = Frame(self.root, bg=self.COLORS['header_bg'], height=52)
         header.pack(fill='x')
         header.pack_propagate(False)
-        title_lbl = Label(header, text="🎯 一键导入 Ranked 种子 Pro Max",
-                          fg='white', bg=self.COLORS['primary'], font=self.FONT_TITLE)
-        title_lbl.pack(side=LEFT, padx=18, pady=10)
+        inner_header = Frame(header, bg=self.COLORS['header_bg'])
+        inner_header.pack(fill='both', padx=20, pady=8)
+        title_lbl = Label(inner_header, text="🎯  一键导入 Ranked 种子  Pro Max",
+                          fg='white', bg=self.COLORS['header_bg'], font=self.FONT_TITLE)
+        title_lbl.pack(side=LEFT)
 
-        main_frame = Frame(self.root, bg=self.COLORS['bg'])
-        main_frame.pack(fill='both', expand=True, padx=12, pady=(12, 0))
+        # ---- Main content: full-width, no centering ----
+        self.main_frame = Frame(self.root, bg=self.COLORS['bg'])
+        self.main_frame.pack(fill='both', expand=True, padx=14, pady=(14, 8))
 
-        left_container = Frame(main_frame, bg=self.COLORS['bg'], width=620)
+        # Left: scrollable settings area (flexible width)
+        left_container = Frame(self.main_frame, bg=self.COLORS['bg'])
         left_container.pack(side=LEFT, fill='both', expand=True)
         left_container.pack_propagate(False)
 
@@ -168,19 +176,19 @@ class SeedToolGUI:
         self.left_canvas.configure(yscrollcommand=scrollbar.set)
 
         self.left_interior = Frame(self.left_canvas, bg=self.COLORS['bg'])
-        self.left_canvas.create_window((0, 0), window=self.left_interior, anchor=NW, width=600)
+        win_id = self.left_canvas.create_window((0, 0), window=self.left_interior, anchor=NW)
         self.left_interior.bind("<Configure>", self._on_left_configure)
         self.left_canvas.bind("<Configure>", lambda e: self.left_canvas.itemconfig(
-            self.left_canvas.find_withtag("all")[0] if self.left_canvas.find_withtag("all") else None,
-            width=e.width) if self.left_canvas.find_withtag("all") else None)
+            1, width=e.width - 4))
 
         self.left_canvas.pack(side=LEFT, fill='both', expand=True)
         scrollbar.pack(side=RIGHT, fill=Y)
 
-        right_frame = Frame(main_frame, bg=self.COLORS['bg'], width=380)
-        right_frame.pack(side=RIGHT, fill='both', expand=False)
-        right_frame.pack_propagate(False)
-        self.create_right_panel(right_frame)
+        # Right: info panel (fixed-ish width)
+        self.right_frame = Frame(self.main_frame, bg=self.COLORS['bg'], width=340)
+        self.right_frame.pack(side=RIGHT, fill='y')
+        self.right_frame.pack_propagate(False)
+        self.create_right_panel(self.right_frame)
 
         self.create_setting_cards()
 
@@ -191,9 +199,10 @@ class SeedToolGUI:
     def _on_left_configure(self, event):
         self.left_canvas.configure(scrollregion=self.left_canvas.bbox("all"))
 
+
     # ===================== 右侧面板 =====================
     def create_right_panel(self, parent):
-        info_card, info_body = self._create_card(parent, "📊 种子信息", fill='x', pady=(0, 10))
+        info_card, info_body = self._create_card(parent, "📊 种子信息", fill='x', pady=(0, 10), ipadx=8)
 
         self.info_type_label = Label(info_body, text="类型：--", fg=self.COLORS['text'],
                                      bg=self.COLORS['card_bg'], font=self.FONT_BODY, anchor='w')
@@ -226,7 +235,7 @@ class SeedToolGUI:
         self.prefetch_label.pack(side=LEFT)
 
         # 日志面板
-        log_card, log_body = self._create_card(parent, "📜 操作日志", fill='both', expand=True, pady=(0, 0))
+        log_card, log_body = self._create_card(parent, "📜 操作日志", fill='both', expand=True, pady=(0, 0), ipadx=8)
         log_card.configure(bg=self.COLORS['card_bg'])
 
         btn_row = Frame(log_body, bg=self.COLORS['card_bg'])
@@ -235,8 +244,8 @@ class SeedToolGUI:
         self._styled_button(btn_row, "导出", self.export_log, 'small').pack(side=LEFT)
 
         self.log_area = scrolledtext.ScrolledText(
-            log_body, height=14, bg='#1e293b', fg='#e2e8f0',
-            insertbackground='white', font=("Consolas", 9),
+            log_body, height=14, bg='#0f172a', fg='#cbd5e1',
+            insertbackground='white', font=("Consolas", 10),
             relief='flat', borderwidth=0, padx=8, pady=6,
             selectbackground='#334155', state='disabled'
         )
@@ -304,7 +313,8 @@ class SeedToolGUI:
             def make_cmd(tid=i, v=var):
                 return lambda: self._toggle_type_btn(tid, v)
             btn = self._create_image_button(grid_frame, i, make_cmd())
-            btn.grid(row=(i-1)//3, column=(i-1)%3, padx=4, pady=4, ipadx=12, ipady=4)
+            btn.grid(row=(i-1)//3, column=(i-1)%3, padx=6, pady=6, ipadx=20, ipady=6, sticky='ew')
+            grid_frame.grid_columnconfigure((i-1)%3, weight=1)
             self.type_btns[i] = btn
 
         self._update_type_btn_appearance()
@@ -415,7 +425,7 @@ class SeedToolGUI:
             path = _os.path.join(base, fname)
             try:
                 img = PhotoImage(file=path)
-                img = img.subsample(max(1, img.width() // 80), max(1, img.height() // 80))
+                img = img.subsample(max(1, img.width() // 64), max(1, img.height() // 64))
                 self.type_images[tid] = img
             except Exception:
                 self.type_images[tid] = None
@@ -559,40 +569,41 @@ class SeedToolGUI:
                 btn.config(bg=self.COLORS['input_bg'], fg=self.COLORS['text'])
 
     def create_variation_group(self, parent, category):
-        row = col = 0
         data = variations_data[category]
         for struct_type, vars_list in data.items():
             if not vars_list:
                 continue
+            # Compact card, packed horizontally
             frame = Frame(parent, bg=self.COLORS['card_bg'], highlightbackground=self.COLORS['border'],
-                          highlightthickness=1, padx=8, pady=6)
-            frame.grid(row=row, column=col, sticky=NW, padx=4, pady=4)
+                          highlightthickness=1, padx=6, pady=4)
+            frame.pack(side=LEFT, anchor=NW, padx=3, pady=3)
             Label(frame, text=struct_type, bg=self.COLORS['card_bg'],
-                  fg=self.COLORS['primary'], font=self.FONT_SMALL).pack(anchor='w', pady=(0, 4))
+                  fg=self.COLORS['primary'], font=("微软雅黑", 10, "bold")).pack(anchor='w', pady=(0, 4))
             for var_str in vars_list:
                 var_row = Frame(frame, bg=self.COLORS['card_bg'])
-                var_row.pack(fill='x', anchor='w', pady=1)
+                var_row.pack(fill='x', anchor='w', pady=0)
                 Label(var_row, text=var_str, bg=self.COLORS['card_bg'],
-                      font=self.FONT_SMALL, fg=self.COLORS['text_secondary']).pack(side=LEFT, padx=(0, 6))
+                      font=("微软雅黑", 8), fg=self.COLORS['text_secondary'],
+                      width=22, anchor='w').pack(side=LEFT, padx=(0, 3))
 
                 inc_var = IntVar(value=0)
                 exc_var = IntVar(value=0)
                 self.var_include[var_str] = inc_var
                 self.var_exclude[var_str] = exc_var
 
-                btn_inc = Button(var_row, text="✓", font=("Arial", 8, "bold"),
+                btn_inc = Button(var_row, text="✓", font=("Arial", 9, "bold"),
                                  bg=self.COLORS['input_bg'], fg=self.COLORS['text_muted'],
-                                 activebackground=self.COLORS['border'], activeforeground=self.COLORS['text_muted'],
-                                 relief='flat', padx=3, pady=0, borderwidth=0,
+                                 activebackground=self.COLORS['primary_light'],
+                                 relief='flat', padx=4, pady=1, borderwidth=0,
                                  cursor='hand2', width=2,
                                  command=lambda vs=var_str, iv=inc_var, ev=exc_var:
                                      self._toggle_var_include(vs, iv, ev))
-                btn_inc.pack(side=LEFT, padx=(0, 2))
+                btn_inc.pack(side=LEFT, padx=(0, 1))
 
-                btn_exc = Button(var_row, text="✗", font=("Arial", 8, "bold"),
+                btn_exc = Button(var_row, text="✗", font=("Arial", 9, "bold"),
                                  bg=self.COLORS['input_bg'], fg=self.COLORS['text_muted'],
-                                 activebackground=self.COLORS['border'], activeforeground=self.COLORS['text_muted'],
-                                 relief='flat', padx=3, pady=0, borderwidth=0,
+                                 activebackground='#fef2f2',
+                                 relief='flat', padx=4, pady=1, borderwidth=0,
                                  cursor='hand2', width=2,
                                  command=lambda vs=var_str, iv=inc_var, ev=exc_var:
                                      self._toggle_var_exclude(vs, iv, ev))
@@ -603,11 +614,7 @@ class SeedToolGUI:
 
             self._styled_button(frame, "清除",
                                 lambda vs=vars_list: self.clear_variation_group(vs),
-                                'small').pack(pady=(4, 0))
-            col += 1
-            if col > 2:
-                col = 0
-                row += 1
+                                'small').pack(pady=(3, 0))
 
     def _toggle_var_include(self, var_str, inc_var, exc_var):
         if inc_var.get() == 1:
