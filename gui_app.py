@@ -76,6 +76,8 @@ class SeedToolGUI:
 
         self.use_elo = BooleanVar(value=False)
         self.elo_option = StringVar(value="1200+")
+        self.fun_mode = BooleanVar(value=False)   # 趣味模式
+        self._fun_toggle = False   # 交替标志：False=宝藏, True=废门
         self.custom_weights = {1: IntVar(value=20), 2: IntVar(value=20), 3: IntVar(value=20),
                                4: IntVar(value=20), 5: IntVar(value=20)}
         self.weight_total = IntVar(value=100)
@@ -323,6 +325,22 @@ class SeedToolGUI:
         self._styled_button(btn_frame, "全选", self.select_all_overworld).pack(side=LEFT, padx=(0, 6))
         self._styled_button(btn_frame, "全不选", self.select_none_overworld).pack(side=LEFT)
 
+        # 趣味模式按钮
+        self.fun_row = Frame(type_body, bg=self.COLORS['card_bg'])
+        self.fun_row.pack(fill='x', pady=(8, 0))
+        Label(self.fun_row, text="🎲  来把爽的", bg=self.COLORS['card_bg'],
+              fg=self.COLORS['warning'], font=self.FONT_HEADING).pack(side=LEFT, padx=(0, 10))
+        self.btn_fun = Button(self.fun_row, text="☐  开启趣味模式",
+                              command=self.toggle_fun_mode,
+                              bg=self.COLORS['input_bg'], fg=self.COLORS['text'],
+                              font=self.FONT_BODY, relief='flat', padx=14, pady=5,
+                              activebackground=self.COLORS['border'],
+                              cursor='hand2', borderwidth=0, anchor='w')
+        self.btn_fun.pack(side=LEFT)
+        Label(self.fun_row, text="废门(附魔剑+金萝卜+可完成) / 宝藏 随机 → 末地Open",
+              bg=self.COLORS['card_bg'], fg=self.COLORS['text_muted'],
+              font=self.FONT_SMALL).pack(side=LEFT, padx=(8, 0))
+
         # Elo 权重
         elo_card, elo_body = self._create_card(parent, "📊 Elo 权重设置", fill='x', pady=(0, 10))
         self.elo_check_btn = Button(elo_body, text="☐  启用 Elo 权重",
@@ -492,6 +510,80 @@ class SeedToolGUI:
         self.random_var.set(0)
         self._update_type_btn_appearance()
         self.on_overworld_change()
+
+    # ===================== 趣味模式 =====================
+    def toggle_fun_mode(self):
+        """切换趣味模式：随机废门或宝藏，预设最优变种"""
+        if self.fun_mode.get():
+            # 关闭趣味模式：恢复默认状态
+            self.fun_mode.set(False)
+            self.btn_fun.config(text="☐  开启趣味模式", fg=self.COLORS['text'])
+            # 重新启用开局类型按钮
+            for i in range(1, 6):
+                btn = self.type_btns[i]
+                btn.config(cursor='hand2')
+                tid = i
+                var = self.type_vars[i]
+                cmd = lambda t=tid, v=var: self._toggle_type_btn(t, v)
+                btn.bind('<Button-1>', lambda e, c=cmd: c())
+                for child in btn._children_widgets:
+                    child.config(cursor='hand2')
+                    child.bind('<Button-1>', lambda e, c=cmd: c())
+            self.random_var.set(1)
+            self._update_type_btn_appearance()
+            # 恢复Elo开关
+            if hasattr(self, '_saved_use_elo'):
+                self.use_elo.set(self._saved_use_elo)
+            self.update_elo_state()
+            # 清除趣味变种
+            self.clear_all_variations()
+            self.log_queue.put("趣味模式已关闭，恢复默认配置")
+        else:
+            # 开启趣味模式
+            self.fun_mode.set(True)
+            self._fun_toggle = False   # 重置交替：从宝藏开始
+            self.btn_fun.config(text="☑  趣味模式已开启！", fg=self.COLORS['warning'])
+            # 取消所有开局类型选择
+            for i in range(1, 6):
+                self.type_vars[i].set(0)
+            self.random_var.set(0)
+            self._update_type_btn_appearance()
+            # 禁用开局类型按钮
+            for i in range(1, 6):
+                btn = self.type_btns[i]
+                btn.config(cursor='arrow')
+                btn.unbind('<Button-1>')
+                for child in btn._children_widgets:
+                    child.config(cursor='arrow')
+                    child.unbind('<Button-1>')
+            # 关闭Elo（保存原状态）
+            self._saved_use_elo = self.use_elo.get()
+            self.use_elo.set(False)
+            self.update_elo_state()
+            # 清空下界和变种选择
+            for key in self.nether_vars:
+                self.nether_vars[key].set(0)
+            self._update_nether_btn_appearance()
+            self.clear_all_variations()
+            self.variation_text.set("")
+            self.log_queue.put("趣味模式已开启！随机废门（附魔剑+金萝卜+可完成）/宝藏，末地Open")
+
+        self.update_selected_overworld()
+        self.update_selected_nether()
+        self.update_selected_variations()
+        self.save_config()
+        self.prefetched_seed = None
+        self.last_available_counts = 0
+        self.trigger_prefetch()
+
+    def clear_all_variations(self):
+        """清除所有变种选择"""
+        for var_str in self.var_include:
+            self.var_include[var_str].set(0)
+            self._update_var_btn_appearance(var_str)
+        for var_str in self.var_exclude:
+            self.var_exclude[var_str].set(0)
+            self._update_var_btn_appearance(var_str)
 
     # ===================== 高级设置面板 =====================
     def create_advanced_panel(self):
@@ -883,6 +975,35 @@ class SeedToolGUI:
         self.root.after(0, lambda: self._prefetch_status("预加载：正在获取...", self.COLORS['warning']))
         api_base = self.api_base.get().rstrip('/')
 
+        # 趣味模式：随机废门/宝藏，预设变种
+        if self.fun_mode.get():
+            # 严格交替：宝藏→废门→宝藏→废门...
+            self._fun_toggle = not self._fun_toggle
+            selected_overworld_list = [2 if self._fun_toggle else 1]  # toggle: False=宝藏(1), True=废门(2)
+            selected_nether_list = []
+            # 清除原有变种，设置趣味模式变种
+            self.selected_variations.clear()
+            self.excluded_variations.clear()
+            if selected_overworld_list[0] == 2:  # 废门
+                self.selected_variations.update([
+                    "type:structure:completable",
+                    "chest:structure:looting_sword",
+                    "chest:structure:golden_carrot"
+                ])
+            completion_ms = None
+            tid, tname, ow, nether, avail = fetch_seed(api_base, selected_overworld_list, selected_nether_list,
+                                                       self.selected_variations, completion_ms,
+                                                       self.excluded_variations)
+            with self.prefetch_lock:
+                self.prefetched_seed = (tid, tname, ow, nether)
+            self.last_available_counts = avail
+            self.root.after(0, self.update_display_with_seed, tname, ow, nether)
+            self.root.after(0, lambda: self.available_label.config(text=f"可用种子：{avail}"))
+            self.root.after(0, lambda: self._prefetch_status(f"预加载：就绪 ({tname})", self.COLORS['success']))
+            self.log_queue.put(f"趣味预加载成功：{tname} - {ow} (可用:{avail})")
+            self.prefetch_fail_count = 0
+            return
+
         if self.use_elo.get():
             option = self.elo_option.get()
             if option == "自定义":
@@ -1202,7 +1323,22 @@ class SeedToolGUI:
             else:
                 self.log_queue.put("没有预加载种子，将实时获取...")
                 try:
-                    if self.use_elo.get():
+                    # 趣味模式：随机废门/宝藏 + 预设变种
+                    if self.fun_mode.get():
+                        self.selected_variations.clear()
+                        self.excluded_variations.clear()
+                        # 严格交替：宝藏→废门→宝藏→废门...
+                        self._fun_toggle = not self._fun_toggle
+                        selected_overworld = [2 if self._fun_toggle else 1]  # toggle: False=宝藏(1), True=废门(2)
+                        selected_nether = []
+                        if selected_overworld[0] == 2:  # 废门
+                            self.selected_variations.update([
+                                "type:structure:completable",
+                                "chest:structure:looting_sword",
+                                "chest:structure:golden_carrot"
+                            ])
+                        completion_ms = None
+                    elif self.use_elo.get():
                         option = self.elo_option.get()
                         possible_types = [tid for tid in range(1, 6) if self.custom_weights[tid].get() > 0]
                         if possible_types:
@@ -1213,16 +1349,19 @@ class SeedToolGUI:
                             selected_overworld = list(range(1, 6))
                     else:
                         selected_overworld = list(self.selected_overworld)
-                    selected_nether = list(self.selected_nether)
-                    self.update_selected_variations()
-                    completion_ms = None
-                    if self.completion_min.get() or self.completion_sec.get():
-                        try:
-                            minutes = int(self.completion_min.get() or 0)
-                            seconds = int(self.completion_sec.get() or 0)
-                            completion_ms = (minutes * 60 + seconds) * 1000
-                        except:
-                            pass
+                    if not self.fun_mode.get():
+                        selected_nether = list(self.selected_nether)
+                        self.update_selected_variations()
+                        completion_ms = None
+                        if self.completion_min.get() or self.completion_sec.get():
+                            try:
+                                minutes = int(self.completion_min.get() or 0)
+                                seconds = int(self.completion_sec.get() or 0)
+                                completion_ms = (minutes * 60 + seconds) * 1000
+                            except:
+                                pass
+                    else:
+                        selected_nether = []
                     tid, tname, ow, nether, avail = fetch_seed(api_base, selected_overworld, selected_nether,
                                                                self.selected_variations, completion_ms,
                                                                self.excluded_variations)
