@@ -18,35 +18,52 @@ from task_runner import task
 
 
 class SeedToolGUI:
-    # 现代蓝白配色 - refined
+    # 现代浅色精修配色（参考 Notion / Linear light）
     COLORS = {
-        'bg': '#f3f4f6',
+        'bg': '#f8fafc',
         'card_bg': '#ffffff',
-        'primary': '#3b82f6',
-        'primary_hover': '#2563eb',
-        'primary_light': '#eff6ff',
-        'success': '#10b981',
-        'warning': '#f59e0b',
-        'danger': '#ef4444',
-        'text': '#1e293b',
-        'text_secondary': '#64748b',
+        'primary': '#4f46e5',
+        'primary_hover': '#4338ca',
+        'primary_light': '#eef2ff',
+        'primary_border': '#c7d2fe',
+        'success': '#059669',
+        'success_bg': '#ecfdf5',
+        'warning': '#d97706',
+        'warning_bg': '#fffbeb',
+        'danger': '#dc2626',
+        'danger_bg': '#fef2f2',
+        'text': '#0f172a',
+        'text_secondary': '#475569',
         'text_muted': '#94a3b8',
-        'border': '#e5e7eb',
-        'input_bg': '#f9fafb',
-        'header_bg': '#1e3a5f',
+        'border': '#e2e8f0',
+        'border_strong': '#cbd5e1',
+        'input_bg': '#f8fafc',
+        'header_bg': '#ffffff',
+        'hover_bg': '#f1f5f9',
     }
 
     def __init__(self, root):
         self.root = root
-        self.root.title("一键导入Ranked种子 Pro Max")
+        self.root.title("Ranked 种子工具")
         self.root.geometry("1200x780"); self.root.eval("tk::PlaceWindow . center")
         self.root.resizable(True, True)
         self.root.configure(bg=self.COLORS['bg'])
 
-        if getattr(sys, 'frozen', False):
-            self.config_path = os.path.join(os.path.dirname(sys.executable), 'config.json')
-        else:
-            self.config_path = 'config.json'
+        # 配置统一存到 %APPDATA%\RankedSeedTool，不再在 exe/工作目录旁边生成 json
+        _config_dir = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'RankedSeedTool')
+        try:
+            os.makedirs(_config_dir, exist_ok=True)
+            _config_path = os.path.join(_config_dir, 'config.json')
+            # 兼容旧版本：如果 exe 目录/工作目录下已有 config.json，迁移过来
+            _legacy = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False)
+                                   else os.getcwd(), 'config.json')
+            if not os.path.exists(_config_path) and os.path.exists(_legacy):
+                import shutil
+                shutil.copy2(_legacy, _config_path)
+            self.config_path = _config_path
+        except Exception:
+            # AppData 不可用时退回原行为
+            self.config_path = os.path.join(os.getcwd(), 'config.json')
 
         self._setup_styles()
 
@@ -95,18 +112,19 @@ class SeedToolGUI:
         style = ttk.Style()
         style.theme_use('clam')
 
-        self.FONT_TITLE = ("微软雅黑", 15, "bold")
-        self.FONT_HEADING = ("微软雅黑", 12, "bold")
-        self.FONT_BODY = ("微软雅黑", 11)
-        self.FONT_SMALL = ("微软雅黑", 10)
+        self.FONT_TITLE = ("微软雅黑", 16, "bold")
+        self.FONT_HEADING = ("微软雅黑", 11, "bold")
+        self.FONT_BODY = ("微软雅黑", 10)
+        self.FONT_SMALL = ("微软雅黑", 9)
         self.FONT_MONO = ("Consolas", 11)
+        self.FONT_MONO_BIG = ("Consolas", 13, "bold")
 
         style.configure('TFrame', background=self.COLORS['bg'])
         style.configure('Card.TFrame', background=self.COLORS['card_bg'])
         style.configure('TLabel', background=self.COLORS['bg'], foreground=self.COLORS['text'], font=self.FONT_BODY)
         style.configure('Card.TLabel', background=self.COLORS['card_bg'], foreground=self.COLORS['text'], font=self.FONT_BODY)
         style.configure('Heading.TLabel', font=self.FONT_HEADING, foreground=self.COLORS['text'])
-        style.configure('Muted.TLabel', foreground=self.COLORS['text_muted'], font=self.FONT_SMALL)
+        style.configure('Muted.TLabel', background=self.COLORS['card_bg'], foreground=self.COLORS['text_muted'], font=self.FONT_SMALL)
         style.configure('Seed.TLabel', font=self.FONT_MONO, foreground=self.COLORS['primary'])
         style.configure('Success.TLabel', foreground=self.COLORS['success'], font=self.FONT_BODY)
         style.configure('Warning.TLabel', foreground=self.COLORS['warning'], font=self.FONT_BODY)
@@ -126,9 +144,9 @@ class SeedToolGUI:
     def _create_card(self, parent, title, **pack_kw):
         ipadx = pack_kw.pop('ipadx', 0)
         card = Frame(parent, bg=self.COLORS['card_bg'], highlightbackground=self.COLORS['border'],
-                     highlightthickness=1, padx=14+ipadx, pady=12)
+                     highlightthickness=1, padx=18+ipadx, pady=14)
         header = Frame(card, bg=self.COLORS['card_bg'])
-        header.pack(fill='x', pady=(0, 8))
+        header.pack(fill='x', pady=(0, 10))
         ttk.Label(header, text=title, style='Heading.TLabel').pack(side=LEFT)
         body = Frame(card, bg=self.COLORS['card_bg'])
         body.pack(fill='x')
@@ -154,15 +172,26 @@ class SeedToolGUI:
 
     # ===================== 主布局 =====================
     def create_main_layout(self):
-        # ---- Header with gradient feel ----
-        header = Frame(self.root, bg=self.COLORS['header_bg'], height=52)
+        # ---- 白色 header + 底部分割线（Notion 风格）----
+        header = Frame(self.root, bg=self.COLORS['header_bg'], height=56)
         header.pack(fill='x')
         header.pack_propagate(False)
+        # 底部细分割线
+        sep = Frame(header, bg=self.COLORS['border'], height=1)
+        sep.pack(side=BOTTOM, fill='x')
         inner_header = Frame(header, bg=self.COLORS['header_bg'])
-        inner_header.pack(fill='both', padx=20, pady=8)
-        title_lbl = Label(inner_header, text="🎯  一键导入 Ranked 种子  Pro Max",
-                          fg='white', bg=self.COLORS['header_bg'], font=self.FONT_TITLE)
+        inner_header.pack(fill='both', padx=24, pady=10)
+        title_lbl = Label(inner_header, text="Ranked 种子工具",
+                          fg=self.COLORS['text'], bg=self.COLORS['header_bg'], font=self.FONT_TITLE)
         title_lbl.pack(side=LEFT)
+        # Pro Max 徽章（靛蓝 pill）
+        badge = Label(inner_header, text=" Pro Max ", fg='white', bg=self.COLORS['primary'],
+                      font=("微软雅黑", 9, "bold"), padx=2, pady=0)
+        badge.pack(side=LEFT, padx=(10, 0), pady=(4, 0))
+        # 右侧热键提示
+        hint = Label(inner_header, text="F5 启动 · F6 退出", fg=self.COLORS['text_muted'],
+                     bg=self.COLORS['header_bg'], font=self.FONT_SMALL)
+        hint.pack(side=RIGHT)
 
         # ---- Main content: full-width, no centering ----
         self.main_frame = Frame(self.root, bg=self.COLORS['bg'])
@@ -204,16 +233,16 @@ class SeedToolGUI:
 
     # ===================== 右侧面板 =====================
     def create_right_panel(self, parent):
-        info_card, info_body = self._create_card(parent, "📊 种子信息", fill='x', pady=(0, 10), ipadx=8)
+        info_card, info_body = self._create_card(parent, "📦 种子信息", fill='x', pady=(0, 10), ipadx=8)
 
-        self.info_type_label = Label(info_body, text="类型：--", fg=self.COLORS['text'],
-                                     bg=self.COLORS['card_bg'], font=self.FONT_BODY, anchor='w')
+        self.info_type_label = Label(info_body, text="类型：--", fg=self.COLORS['primary'],
+                                     bg=self.COLORS['card_bg'], font=self.FONT_HEADING, anchor='w')
         self.info_type_label.pack(fill='x')
-        self.info_ow_label = Label(info_body, text="主世界种子：--", fg=self.COLORS['text_secondary'],
-                                   bg=self.COLORS['card_bg'], font=self.FONT_MONO, anchor='w')
-        self.info_ow_label.pack(fill='x', pady=(2, 0))
-        self.info_nether_label = Label(info_body, text="下界种子：--", fg=self.COLORS['text_secondary'],
-                                       bg=self.COLORS['card_bg'], font=self.FONT_MONO, anchor='w')
+        self.info_ow_label = Label(info_body, text="主世界：--", fg=self.COLORS['text'],
+                                   bg=self.COLORS['card_bg'], font=self.FONT_MONO_BIG, anchor='w')
+        self.info_ow_label.pack(fill='x', pady=(6, 0))
+        self.info_nether_label = Label(info_body, text="下界：--", fg=self.COLORS['text_secondary'],
+                                       bg=self.COLORS['card_bg'], font=self.FONT_MONO_BIG, anchor='w')
         self.info_nether_label.pack(fill='x', pady=(2, 0))
 
         self._create_separator(info_card)
@@ -236,20 +265,20 @@ class SeedToolGUI:
                                      bg=self.COLORS['card_bg'], font=self.FONT_SMALL)
         self.prefetch_label.pack(side=LEFT)
 
-        # 日志面板
-        log_card, log_body = self._create_card(parent, "📜 操作日志", fill='both', expand=True, pady=(0, 0), ipadx=8)
+        # 日志面板（浅色终端风：米白底 + 深灰字）
+        log_card, log_body = self._create_card(parent, "📝 操作日志", fill='both', expand=True, pady=(0, 0), ipadx=8)
         log_card.configure(bg=self.COLORS['card_bg'])
 
         btn_row = Frame(log_body, bg=self.COLORS['card_bg'])
         btn_row.pack(fill='x', pady=(0, 6))
-        self._styled_button(btn_row, "清空", self.clear_log, 'small').pack(side=LEFT, padx=(0, 6))
-        self._styled_button(btn_row, "导出", self.export_log, 'small').pack(side=LEFT)
+        self._ghost_button(btn_row, "清空", self.clear_log).pack(side=LEFT, padx=(0, 6))
+        self._ghost_button(btn_row, "导出", self.export_log).pack(side=LEFT)
 
         self.log_area = scrolledtext.ScrolledText(
-            log_body, height=14, bg='#0f172a', fg='#cbd5e1',
-            insertbackground='white', font=("Consolas", 10),
-            relief='flat', borderwidth=0, padx=8, pady=6,
-            selectbackground='#334155', state='disabled'
+            log_body, height=14, bg='#fbfcfe', fg='#334155',
+            insertbackground=self.COLORS['text'], font=("Consolas", 10),
+            relief='flat', borderwidth=1, padx=10, pady=8,
+            selectbackground='#e2e8f0', state='disabled'
         )
         self.log_area.pack(fill='both', expand=True)
         self._bind_mousewheel_recursive(self.log_area, self._on_log_mousewheel)
@@ -258,6 +287,15 @@ class SeedToolGUI:
         warn.pack(fill='x', pady=(8, 0))
         Label(warn, text="⚠ 仅在游戏主界面使用热键，否则可能造成严重后果",
               fg=self.COLORS['danger'], bg=self.COLORS['bg'], font=self.FONT_SMALL).pack(anchor='w')
+
+    def _ghost_button(self, parent, text, command):
+        """次按钮：白底细边框（ghost 风格）"""
+        return Button(parent, text=text, command=command,
+                      bg=self.COLORS['card_bg'], fg=self.COLORS['text_secondary'],
+                      font=self.FONT_SMALL, relief='solid', padx=12, pady=3,
+                      activebackground=self.COLORS['hover_bg'],
+                      activeforeground=self.COLORS['text'],
+                      cursor='hand2', borderwidth=1)
 
     def _styled_button(self, parent, text, command, size='normal'):
         if size == 'small':
@@ -279,12 +317,13 @@ class SeedToolGUI:
         parent = self.left_interior
 
         # API 设置
-        api_card, api_body = self._create_card(parent, "🔗 API 设置", fill='x', pady=(0, 10))
+        api_card, api_body = self._create_card(parent, "⚙️ API 设置", fill='x', pady=(0, 10))
         api_row = Frame(api_body, bg=self.COLORS['card_bg'])
         api_row.pack(fill='x')
         self.api_entry = Entry(api_row, textvariable=self.api_base, width=48,
                                bg=self.COLORS['input_bg'], relief='solid',
-                               borderwidth=1, font=self.FONT_BODY, fg=self.COLORS['text'])
+                               borderwidth=1, font=self.FONT_BODY, fg=self.COLORS['text'],
+                               insertbackground=self.COLORS['text'])
         self.api_entry.pack(side=LEFT, fill='x', expand=True, padx=(0, 8))
         Label(api_row, text="默认: 43.143.231.104:8001", fg=self.COLORS['text_muted'],
               bg=self.COLORS['card_bg'], font=self.FONT_SMALL).pack(side=RIGHT)
@@ -297,9 +336,11 @@ class SeedToolGUI:
         self.api_entry.bind("<KeyRelease>", on_api_entry_change)
 
         # 开局类型
-        type_card, type_body = self._create_card(parent, "🎮 开局类型（点击切换，全不选=全部随机）", fill='x', pady=(0, 10))
+        type_card, type_body = self._create_card(parent, "🎯 开局类型", fill='x', pady=(0, 10))
         grid_frame = Frame(type_body, bg=self.COLORS['card_bg'])
         grid_frame.pack(fill='x')
+        Label(type_body, text="点击切换，全不选 = 全部随机", fg=self.COLORS['text_muted'],
+              bg=self.COLORS['card_bg'], font=self.FONT_SMALL).pack(fill='x', pady=(0, 6))
         self._load_type_images()
 
         self.type_vars = {}
@@ -322,20 +363,21 @@ class SeedToolGUI:
         self._update_type_btn_appearance()
         btn_frame = Frame(type_body, bg=self.COLORS['card_bg'])
         btn_frame.pack(fill='x', pady=(8, 0))
-        self._styled_button(btn_frame, "全选", self.select_all_overworld).pack(side=LEFT, padx=(0, 6))
-        self._styled_button(btn_frame, "全不选", self.select_none_overworld).pack(side=LEFT)
+        self._ghost_button(btn_frame, "全选", self.select_all_overworld).pack(side=LEFT, padx=(0, 6))
+        self._ghost_button(btn_frame, "全不选", self.select_none_overworld).pack(side=LEFT)
 
         # 趣味模式按钮
         self.fun_row = Frame(type_body, bg=self.COLORS['card_bg'])
-        self.fun_row.pack(fill='x', pady=(8, 0))
-        Label(self.fun_row, text="🎲  来把爽的", bg=self.COLORS['card_bg'],
-              fg=self.COLORS['warning'], font=self.FONT_HEADING).pack(side=LEFT, padx=(0, 10))
-        self.btn_fun = Button(self.fun_row, text="☐  开启趣味模式",
+        self.fun_row.pack(fill='x', pady=(10, 0))
+        Label(self.fun_row, text="来把爽的", bg=self.COLORS['card_bg'],
+              fg=self.COLORS['text'], font=self.FONT_HEADING).pack(side=LEFT, padx=(0, 10))
+        self.btn_fun = Button(self.fun_row, text="开启趣味模式",
                               command=self.toggle_fun_mode,
-                              bg=self.COLORS['input_bg'], fg=self.COLORS['text'],
-                              font=self.FONT_BODY, relief='flat', padx=14, pady=5,
-                              activebackground=self.COLORS['border'],
-                              cursor='hand2', borderwidth=0, anchor='w')
+                              bg=self.COLORS['warning_bg'], fg=self.COLORS['warning'],
+                              font=self.FONT_BODY, relief='solid', padx=14, pady=5,
+                              activebackground=self.COLORS['warning'],
+                              activeforeground='white',
+                              cursor='hand2', borderwidth=1, anchor='w')
         self.btn_fun.pack(side=LEFT)
         Label(self.fun_row, text="废门(附魔剑+金萝卜+可完成) / 宝藏 随机 → 末地Open",
               bg=self.COLORS['card_bg'], fg=self.COLORS['text_muted'],
@@ -343,12 +385,12 @@ class SeedToolGUI:
 
         # Elo 权重
         elo_card, elo_body = self._create_card(parent, "📊 Elo 权重设置", fill='x', pady=(0, 10))
-        self.elo_check_btn = Button(elo_body, text="☐  启用 Elo 权重",
+        self.elo_check_btn = Button(elo_body, text="启用 Elo 权重",
                                     command=self._toggle_elo,
-                                    bg=self.COLORS['card_bg'], fg=self.COLORS['text'],
-                                    font=self.FONT_BODY, relief='flat', padx=6, pady=4,
-                                    activebackground=self.COLORS['card_bg'],
-                                    cursor='hand2', borderwidth=0, anchor='w')
+                                    bg=self.COLORS['card_bg'], fg=self.COLORS['text_secondary'],
+                                    font=self.FONT_BODY, relief='solid', padx=10, pady=4,
+                                    activebackground=self.COLORS['hover_bg'],
+                                    cursor='hand2', borderwidth=1, anchor='w')
         self.elo_check_btn.pack(fill='x')
 
         self.elo_radio_frame = Frame(elo_body, bg=self.COLORS['card_bg'])
@@ -388,19 +430,23 @@ class SeedToolGUI:
         self.update_elo_state()
 
         # 热键设置
-        hk_card, hk_body = self._create_card(parent, "⌨ 热键设置（点击按钮后按目标键）", fill='x', pady=(0, 10))
+        hk_card, hk_body = self._create_card(parent, "⌨️ 热键设置", fill='x', pady=(0, 10))
         hk_row = Frame(hk_body, bg=self.COLORS['card_bg'])
         hk_row.pack(fill='x')
-        Label(hk_row, text="启动:", bg=self.COLORS['card_bg'], font=self.FONT_BODY).pack(side=LEFT, padx=(0, 6))
+        Label(hk_row, text="启动:", bg=self.COLORS['card_bg'], font=self.FONT_BODY,
+              fg=self.COLORS['text_secondary']).pack(side=LEFT, padx=(0, 6))
         self.btn_start_hotkey = Button(hk_row, text="F5", width=9, relief='solid', borderwidth=1,
                                        bg=self.COLORS['input_bg'], font=self.FONT_BODY,
                                        command=lambda: self.capture_hotkey('start'), cursor='hand2')
         self.btn_start_hotkey.pack(side=LEFT, padx=(0, 16))
-        Label(hk_row, text="退出:", bg=self.COLORS['card_bg'], font=self.FONT_BODY).pack(side=LEFT, padx=(0, 6))
+        Label(hk_row, text="退出:", bg=self.COLORS['card_bg'], font=self.FONT_BODY,
+              fg=self.COLORS['text_secondary']).pack(side=LEFT, padx=(0, 6))
         self.btn_exit_hotkey = Button(hk_row, text="F6", width=9, relief='solid', borderwidth=1,
                                       bg=self.COLORS['input_bg'], font=self.FONT_BODY,
                                       command=lambda: self.capture_hotkey('exit'), cursor='hand2')
         self.btn_exit_hotkey.pack(side=LEFT)
+        Label(hk_row, text="（点击按钮后按目标键）", bg=self.COLORS['card_bg'],
+              fg=self.COLORS['text_muted'], font=self.FONT_SMALL).pack(side=LEFT, padx=(12, 0))
         self.start_hotkey_text = StringVar(value="F5")
         self.exit_hotkey_text = StringVar(value="F6")
 
@@ -408,20 +454,20 @@ class SeedToolGUI:
         toggle_row = Frame(parent, bg=self.COLORS['bg'])
         toggle_row.pack(fill='x', pady=(0, 10))
 
-        self.btn_advanced = Button(toggle_row, text="⚙  高级设置  ▲", command=self.toggle_advanced,
+        self.btn_advanced = Button(toggle_row, text="🔧 高级设置  ▾", command=self.toggle_advanced,
                                     bg=self.COLORS['card_bg'], fg=self.COLORS['text'],
-                                    font=self.FONT_BODY, relief='flat', padx=14, pady=8,
-                                    activebackground=self.COLORS['border'], cursor='hand2', borderwidth=0, anchor='w')
+                                    font=self.FONT_BODY, relief='solid', padx=14, pady=8,
+                                    activebackground=self.COLORS['hover_bg'], cursor='hand2', borderwidth=1, anchor='w')
         self.btn_advanced.pack(fill='x', pady=(0, 2))
 
         self.frame_advanced = Frame(parent, bg=self.COLORS['bg'])
         self.create_advanced_panel()
         self.frame_advanced.pack(fill='x', pady=(0, 10))
 
-        self.btn_toolbox = Button(toggle_row, text="🧰 百宝箱  ▼", command=self.toggle_toolbox,
+        self.btn_toolbox = Button(toggle_row, text="🧰 百宝箱  ▾", command=self.toggle_toolbox,
                                    bg=self.COLORS['card_bg'], fg=self.COLORS['text'],
-                                   font=self.FONT_BODY, relief='flat', padx=14, pady=8,
-                                   activebackground=self.COLORS['border'], cursor='hand2', borderwidth=0, anchor='w')
+                                   font=self.FONT_BODY, relief='solid', padx=14, pady=8,
+                                   activebackground=self.COLORS['hover_bg'], cursor='hand2', borderwidth=1, anchor='w')
         self.btn_toolbox.pack(fill='x')
         self.frame_toolbox = Frame(parent, bg=self.COLORS['bg'])
         self.create_toolbox_panel()
@@ -448,19 +494,74 @@ class SeedToolGUI:
             except Exception:
                 self.type_images[tid] = None
 
+        # 下界堡垒类型图片（真实渲染图，64x64 缩略）
+        self.nether_images = {}
+        nether_img_files = {
+            'bridge': 'bastion_bridge.png',
+            'treasure': 'bastion_treasure.png',
+            'housing': 'bastion_housing.png',
+            'stables': 'bastion_stables.png',
+        }
+        for key, fname in nether_img_files.items():
+            path = _os.path.join(base, fname)
+            try:
+                img = PhotoImage(file=path)
+                # 缩到 64x64
+                w, h = img.width(), img.height()
+                factor = max(1, max(w, h) // 64)
+                if factor > 1:
+                    img = img.subsample(factor, factor)
+                self.nether_images[key] = img
+            except Exception:
+                self.nether_images[key] = None
+
+        # 维度图片（用于 Tab 图标，16x16 小图）
+        self.dim_images = {}
+        dim_img_files = {
+            'overworld': 'overworld.png',
+            'bastion': 'bastion_treasure.png',  # 堡垒用藏宝室图代表
+            'fortress': 'fortress.png',
+            'end': 'end.png',
+        }
+        for key, fname in dim_img_files.items():
+            path = _os.path.join(base, fname)
+            try:
+                img = PhotoImage(file=path)
+                w, h = img.width(), img.height()
+                factor = max(1, max(w, h) // 16)
+                if factor > 1:
+                    img = img.subsample(factor, factor)
+                self.dim_images[key] = img
+            except Exception:
+                self.dim_images[key] = None
+
+        # emoji 兜底（图片加载失败时用）
+        self.nether_icons = {
+            'bridge': '🌉',
+            'treasure': '💎',
+            'housing': '🏠',
+            'stables': '🛖',
+        }
+        self.dim_icons = {
+            'overworld': '🌍',
+            'bastion': '🏰',
+            'fortress': '🔥',
+            'end': '🌌',
+        }
+
     def _create_image_button(self, parent, type_id, command):
-        btn_frame = Frame(parent, bg=self.COLORS['input_bg'],
+        btn_frame = Frame(parent, bg=self.COLORS['card_bg'],
                           highlightbackground=self.COLORS['border'],
                           highlightthickness=1, cursor='hand2')
         btn_frame.bind('<Button-1>', lambda e: command())
         img = self.type_images.get(type_id)
         if img:
-            img_lbl = Label(btn_frame, image=img, bg=self.COLORS['input_bg'], cursor='hand2')
+            img_lbl = Label(btn_frame, image=img, bg=self.COLORS['card_bg'], cursor='hand2')
             img_lbl.image = img
             img_lbl.pack(pady=(8, 2))
             img_lbl.bind('<Button-1>', lambda e: command())
         txt = type_names[type_id]
-        text_lbl = Label(btn_frame, text=txt, bg=self.COLORS['input_bg'],
+        text_lbl = Label(btn_frame, text=txt, bg=self.COLORS['card_bg'],
                          fg=self.COLORS['text'], font=self.FONT_SMALL, cursor='hand2')
         text_lbl.pack(pady=(0, 6))
         text_lbl.bind('<Button-1>', lambda e: command())
@@ -471,9 +572,9 @@ class SeedToolGUI:
 
     def _update_image_button_style(self, btn_frame, selected):
         if selected:
-            bg, border, fg = '#e8f0fe', self.COLORS['primary'], self.COLORS['primary']
+            bg, border, fg = self.COLORS['primary_light'], self.COLORS['primary'], self.COLORS['primary']
         else:
-            bg, border, fg = self.COLORS['input_bg'], self.COLORS['border'], self.COLORS['text']
+            bg, border, fg = self.COLORS['card_bg'], self.COLORS['border'], self.COLORS['text']
         btn_frame.config(bg=bg, highlightbackground=border)
         for child in btn_frame._children_widgets:
             try:
@@ -517,7 +618,7 @@ class SeedToolGUI:
         if self.fun_mode.get():
             # 关闭趣味模式：恢复默认状态
             self.fun_mode.set(False)
-            self.btn_fun.config(text="☐  开启趣味模式", fg=self.COLORS['text'])
+            self.btn_fun.config(text="开启趣味模式", fg=self.COLORS['warning'])
             # 重新启用开局类型按钮
             for i in range(1, 6):
                 btn = self.type_btns[i]
@@ -542,7 +643,7 @@ class SeedToolGUI:
             # 开启趣味模式
             self.fun_mode.set(True)
             self._fun_toggle = False   # 重置交替：从宝藏开始
-            self.btn_fun.config(text="☑  趣味模式已开启！", fg=self.COLORS['warning'])
+            self.btn_fun.config(text="趣味模式已开启", fg='white', bg=self.COLORS['warning'])
             # 取消所有开局类型选择
             for i in range(1, 6):
                 self.type_vars[i].set(0)
@@ -592,24 +693,52 @@ class SeedToolGUI:
         self._var_include_btns = {}
         self._var_exclude_btns = {}
 
-        nether_card, nether_body = self._create_card(self.frame_advanced, "🔥 下界堡垒类型（可多选）",
+        nether_card, nether_body = self._create_card(self.frame_advanced, "🏰 下界堡垒类型（可多选）",
                                                       fill='x', pady=(0, 8))
         self.nether_vars = {}
-        for key, name in nether_types.items():
+        self.nether_btns = {}
+        # 2×2 网格布局
+        nether_grid = Frame(nether_body, bg=self.COLORS['card_bg'])
+        nether_grid.pack(fill='x')
+        for idx, (key, name) in enumerate(nether_types.items()):
             var = IntVar()
-            btn = Button(nether_body, text=name,
-                         command=lambda k=key, v=var: self._toggle_nether_btn(k, v),
-                         bg=self.COLORS['input_bg'], fg=self.COLORS['text'],
-                         font=self.FONT_BODY, relief='flat', padx=12, pady=5,
-                         activebackground=self.COLORS['primary'], activeforeground='white',
-                         cursor='hand2', borderwidth=0, width=8)
-            btn.pack(side=LEFT, padx=2)
+            # 优先用真实图片，失败用 emoji
+            img = self.nether_images.get(key)
+            icon = self.nether_icons.get(key, '❓')
+            # 卡片式按钮：图片/图标在上，文字在下
+            btn_frame = Frame(nether_grid, bg=self.COLORS['card_bg'],
+                              highlightbackground=self.COLORS['border'],
+                              highlightthickness=1, cursor='hand2')
+            row, col = idx // 2, idx % 2
+            btn_frame.grid(row=row, column=col, padx=4, pady=4, sticky='nsew')
+            nether_grid.grid_columnconfigure(col, weight=1)
+            # 图片或 emoji
+            if img:
+                icon_lbl = Label(btn_frame, image=img, bg=self.COLORS['card_bg'], cursor='hand2')
+                icon_lbl.image = img  # 防 GC
+            else:
+                icon_lbl = Label(btn_frame, text=icon, font=("Segoe UI Emoji", 20),
+                                 bg=self.COLORS['card_bg'], cursor='hand2')
+            icon_lbl.pack(pady=(8, 2))
+            # 文字
+            text_lbl = Label(btn_frame, text=name, font=self.FONT_SMALL,
+                             bg=self.COLORS['card_bg'], fg=self.COLORS['text'],
+                             cursor='hand2')
+            text_lbl.pack(pady=(0, 6))
+            # 绑定点击
+            def make_cmd(k=key, v=var):
+                return lambda: self._toggle_nether_btn(k, v)
+            cmd = make_cmd()
+            btn_frame.bind('<Button-1>', lambda e, c=cmd: c())
+            icon_lbl.bind('<Button-1>', lambda e, c=cmd: c())
+            text_lbl.bind('<Button-1>', lambda e, c=cmd: c())
+            # 存引用
+            btn_frame._icon_lbl = icon_lbl
+            btn_frame._text_lbl = text_lbl
             self.nether_vars[key] = var
-            if not hasattr(self, 'nether_btns'):
-                self.nether_btns = {}
-            self.nether_btns[key] = btn
+            self.nether_btns[key] = btn_frame
 
-        var_card, var_body = self._create_card(self.frame_advanced, "🎯 变种筛选", fill='x', pady=(0, 8))
+        var_card, var_body = self._create_card(self.frame_advanced, "🧬 变种筛选", fill='x', pady=(0, 8))
         self.var_notebook = ttk.Notebook(var_body)
         self.var_notebook.pack(fill='both', expand=True)
 
@@ -638,7 +767,7 @@ class SeedToolGUI:
               font=self.FONT_BODY).pack(side=LEFT, padx=(0, 4))
         self._styled_button(extra_row, "清除", lambda: self.variation_text.set(""), 'small').pack(side=LEFT)
 
-        time_card, time_body = self._create_card(self.frame_advanced, "⏱ 完成时间上限（留空=不限制）",
+        time_card, time_body = self._create_card(self.frame_advanced, "⏱️ 完成时间上限（留空=不限制）",
                                                   fill='x', pady=(0, 0))
         Label(time_body, text="分钟:", bg=self.COLORS['card_bg'], font=self.FONT_BODY).pack(side=LEFT, padx=(0, 4))
         Spinbox(time_body, from_=0, to=59, textvariable=self.completion_min, width=5,
@@ -654,11 +783,19 @@ class SeedToolGUI:
 
     def _update_nether_btn_appearance(self):
         for key, var in self.nether_vars.items():
-            btn = self.nether_btns[key]
+            btn_frame = self.nether_btns[key]
             if var.get() == 1:
-                btn.config(bg=self.COLORS['primary'], fg='white')
+                bg, border = self.COLORS['primary_light'], self.COLORS['primary']
+                fg = self.COLORS['primary']
             else:
-                btn.config(bg=self.COLORS['input_bg'], fg=self.COLORS['text'])
+                bg, border = self.COLORS['card_bg'], self.COLORS['border']
+                fg = self.COLORS['text']
+            btn_frame.config(bg=bg, highlightbackground=border)
+            try:
+                btn_frame._icon_lbl.config(bg=bg)
+                btn_frame._text_lbl.config(bg=bg, fg=fg)
+            except Exception:
+                pass
 
     def create_variation_group(self, parent, category):
         data = variations_data[category]
@@ -667,35 +804,47 @@ class SeedToolGUI:
                 continue
             # Compact card, packed horizontally
             frame = Frame(parent, bg=self.COLORS['card_bg'], highlightbackground=self.COLORS['border'],
-                          highlightthickness=1, padx=6, pady=4)
-            frame.pack(side=LEFT, anchor=NW, padx=3, pady=3)
-            Label(frame, text=struct_type, bg=self.COLORS['card_bg'],
-                  fg=self.COLORS['primary'], font=("微软雅黑", 10, "bold")).pack(anchor='w', pady=(0, 4))
+                          highlightthickness=1, padx=10, pady=8)
+            frame.pack(side=LEFT, anchor=NW, padx=4, pady=4)
+            # 结构类型标题（带图标）
+            struct_icons = {
+                'village': '🏘️', 'desert_temple': '🏜️', 'ruined_portal': '🌀',
+                'shipwreck': '🚢', 'buried_treasure': '💰',
+                'bridge': '🌉', 'treasure': '💎', 'housing': '🏠', 'stables': '🛖',
+                'fortress': '🔥', 'end_tower': '🗼', 'end_spawn': '🌌'
+            }
+            icon = struct_icons.get(struct_type, '📦')
+            Label(frame, text=f"{icon} {struct_type}", bg=self.COLORS['card_bg'],
+                  fg=self.COLORS['primary'], font=("微软雅黑", 10, "bold")).pack(anchor='w', pady=(0, 6))
             for var_str in vars_list:
                 var_row = Frame(frame, bg=self.COLORS['card_bg'])
-                var_row.pack(fill='x', anchor='w', pady=0)
+                var_row.pack(fill='x', anchor='w', pady=1)
                 Label(var_row, text=var_str, bg=self.COLORS['card_bg'],
-                      font=("微软雅黑", 8), fg=self.COLORS['text_secondary'],
-                      width=22, anchor='w').pack(side=LEFT, padx=(0, 3))
+                      font=("Consolas", 9), fg=self.COLORS['text_secondary'],
+                      width=24, anchor='w').pack(side=LEFT, padx=(0, 6))
 
                 inc_var = IntVar(value=0)
                 exc_var = IntVar(value=0)
                 self.var_include[var_str] = inc_var
                 self.var_exclude[var_str] = exc_var
 
-                btn_inc = Button(var_row, text="✓", font=("Arial", 9, "bold"),
-                                 bg=self.COLORS['input_bg'], fg=self.COLORS['text_muted'],
-                                 activebackground=self.COLORS['primary_light'],
-                                 relief='flat', padx=4, pady=1, borderwidth=0,
+                btn_inc = Button(var_row, text="✓", font=("Arial", 10, "bold"),
+                                 bg=self.COLORS['success_bg'], fg=self.COLORS['success'],
+                                 activebackground=self.COLORS['success'], activeforeground='white',
+                                 relief='solid', padx=4, pady=1, borderwidth=1,
+                                 highlightbackground=self.COLORS['success'],
+                                 highlightthickness=1,
                                  cursor='hand2', width=2,
                                  command=lambda vs=var_str, iv=inc_var, ev=exc_var:
                                      self._toggle_var_include(vs, iv, ev))
                 btn_inc.pack(side=LEFT, padx=(0, 1))
 
-                btn_exc = Button(var_row, text="✗", font=("Arial", 9, "bold"),
-                                 bg=self.COLORS['input_bg'], fg=self.COLORS['text_muted'],
-                                 activebackground='#fef2f2',
-                                 relief='flat', padx=4, pady=1, borderwidth=0,
+                btn_exc = Button(var_row, text="✗", font=("Arial", 10, "bold"),
+                                 bg=self.COLORS['danger_bg'], fg=self.COLORS['danger'],
+                                 activebackground=self.COLORS['danger'], activeforeground='white',
+                                 relief='solid', padx=4, pady=1, borderwidth=1,
+                                 highlightbackground=self.COLORS['danger'],
+                                 highlightthickness=1,
                                  cursor='hand2', width=2,
                                  command=lambda vs=var_str, iv=inc_var, ev=exc_var:
                                      self._toggle_var_exclude(vs, iv, ev))
@@ -734,17 +883,21 @@ class SeedToolGUI:
         if btn_inc and inc_var:
             if inc_var.get() == 1:
                 btn_inc.config(bg=self.COLORS['success'], fg='white',
-                               activebackground=self.COLORS['success'], activeforeground='white')
+                               activebackground=self.COLORS['success'], activeforeground='white',
+                               highlightbackground=self.COLORS['success'])
             else:
-                btn_inc.config(bg=self.COLORS['input_bg'], fg=self.COLORS['text_muted'],
-                               activebackground=self.COLORS['border'], activeforeground=self.COLORS['text_muted'])
+                btn_inc.config(bg=self.COLORS['success_bg'], fg=self.COLORS['success'],
+                               activebackground=self.COLORS['success'], activeforeground='white',
+                               highlightbackground=self.COLORS['success'])
         if btn_exc and exc_var:
             if exc_var.get() == 1:
                 btn_exc.config(bg=self.COLORS['danger'], fg='white',
-                               activebackground=self.COLORS['danger'], activeforeground='white')
+                               activebackground=self.COLORS['danger'], activeforeground='white',
+                               highlightbackground=self.COLORS['danger'])
             else:
-                btn_exc.config(bg=self.COLORS['input_bg'], fg=self.COLORS['text_muted'],
-                               activebackground=self.COLORS['border'], activeforeground=self.COLORS['text_muted'])
+                btn_exc.config(bg=self.COLORS['danger_bg'], fg=self.COLORS['danger'],
+                               activebackground=self.COLORS['danger'], activeforeground='white',
+                               highlightbackground=self.COLORS['danger'])
 
     def clear_variation_group(self, var_strings):
         for s in var_strings:
@@ -756,7 +909,7 @@ class SeedToolGUI:
         self.on_variation_change()
 
     def create_toolbox_panel(self):
-        card, body = self._create_card(self.frame_toolbox, "🧰 比赛查询", fill='x', pady=(0, 8))
+        card, body = self._create_card(self.frame_toolbox, "🔍 比赛查询", fill='x', pady=(0, 8))
 
         query_row = Frame(body, bg=self.COLORS['card_bg'])
         query_row.pack(fill='x')
@@ -787,9 +940,9 @@ class SeedToolGUI:
     def update_elo_state(self):
         enabled = self.use_elo.get()
         if enabled:
-            self.elo_check_btn.config(text="☑  启用 Elo 权重", fg=self.COLORS['primary'])
+            self.elo_check_btn.config(text="✓ 启用 Elo 权重", fg=self.COLORS['primary'])
         else:
-            self.elo_check_btn.config(text="☐  启用 Elo 权重", fg=self.COLORS['text'])
+            self.elo_check_btn.config(text="启用 Elo 权重", fg=self.COLORS['text_secondary'])
 
         if enabled:
             for i in range(1, 6):
@@ -933,24 +1086,24 @@ class SeedToolGUI:
     def toggle_advanced(self):
         if self.frame_advanced.winfo_ismapped():
             self.frame_advanced.pack_forget()
-            self.btn_advanced.config(text="⚙  高级设置  ▼")
+            self.btn_advanced.config(text="高级设置  ▾")
         else:
             self.frame_advanced.pack(fill='x', pady=(0, 10))
-            self.btn_advanced.config(text="⚙  高级设置  ▲")
+            self.btn_advanced.config(text="高级设置  ▴")
             if self.frame_toolbox.winfo_ismapped():
                 self.frame_toolbox.pack_forget()
-                self.btn_toolbox.config(text="🧰 百宝箱  ▼")
+                self.btn_toolbox.config(text="百宝箱  ▾")
 
     def toggle_toolbox(self):
         if self.frame_toolbox.winfo_ismapped():
             self.frame_toolbox.pack_forget()
-            self.btn_toolbox.config(text="🧰 百宝箱  ▼")
+            self.btn_toolbox.config(text="百宝箱  ▾")
         else:
             self.frame_toolbox.pack(fill='x', pady=(0, 10))
-            self.btn_toolbox.config(text="🧰 百宝箱  ▲")
+            self.btn_toolbox.config(text="百宝箱  ▴")
             if self.frame_advanced.winfo_ismapped():
                 self.frame_advanced.pack_forget()
-                self.btn_advanced.config(text="⚙  高级设置  ▼")
+                self.btn_advanced.config(text="高级设置  ▾")
 
     # ---------- 预加载 ----------
     def _prefetch_status(self, text, color):
@@ -1253,8 +1406,9 @@ class SeedToolGUI:
             for tid in selected:
                 if tid in self.type_vars:
                     self.type_vars[tid].set(1)
-            if config.get('random_checked', 0):
-                self.random_var.set(1)
+            # 随机按钮状态必须显式恢复，否则残留默认勾选会在下面
+            # update_selected_overworld() 里把刚恢复的主世界类型清空
+            self.random_var.set(1 if config.get('random_checked', 0) else 0)
             self.update_selected_overworld()
             nether = config.get('selected_nether', [])
             for key in nether:

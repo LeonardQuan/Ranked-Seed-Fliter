@@ -29,9 +29,10 @@ if __name__ == "__main__":
         ctypes.windll.user32.MessageBoxW(0, "该应用已经启动过了！", "提示", 0x40 | 0x0)
         sys.exit(0)
 
-    # 启用高DPI感知
+    # 启用高DPI感知（系统级：修复高缩放下最大化无法铺满屏幕的问题，
+    # per-monitor v2 会让 Tk 尺寸计算错位）
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
     except Exception:
         try:
             ctypes.windll.user32.SetProcessDPIAware()

@@ -23,7 +23,7 @@ def task(api_base, seed_info, log_queue, stats_callback):
         3. tab×3 → Create New World 聚焦
         4. enter  → 进入创建世界基础页
         5. tab×2 → 游戏难度按钮组聚焦
-        6. enter×2 → 切到 Peaceful
+        6. enter×3 → 切到 Easy（简单模式）
         7. tab×4 → More World Options 聚焦
         8. enter  → 进入详细设置页
         9. tab×3 → advseed 标签聚焦
@@ -53,8 +53,8 @@ def task(api_base, seed_info, log_queue, stats_callback):
         # === 3. 基础页 → 切难度 → More World Options ===
         for _ in range(2):
             kb.tap(Key.tab); time.sleep(0.1)
-        # enter×2 切换难度（Normal → Hard → Peaceful 循环）
-        for _ in range(2):
+        # enter×3 切换难度（默认 Normal → Hard → Peaceful → Easy）
+        for _ in range(3):
             kb.tap(Key.enter); time.sleep(0.15)
         time.sleep(0.2)
         for _ in range(4):
